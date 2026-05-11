@@ -52,5 +52,22 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << EOF
+          finflow_dbt:
+            outputs:
+              dev:
+                type: redshift
+                host: ${REDSHIFT_HOST}
+                port: 5439
+                user: admin
+                password: ${REDSHIFT_PASSWORD}
+                dbname: finflow_db
+                schema: public
+                threads: 4
+                is_serverless: true
+                serverless_work_group: finflow-workgroup
+            target: dev
+          EOF
           cd finflow_dbt
-          dbt run --profiles-dir . --select stg_market_data mrt_market_summary mrt_volume_anomaly
+          dbt run --select stg_market_data mrt_market_summary mrt_volume_anomaly
