@@ -1,0 +1,27 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# AWS credentials
+*.csv
+.aws/
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+airflow/.env
+# OS
+.DS_Store
+Thumbs.db
+# Airflow logs
+airflow/logs/
+airflow/config/
+# dbt
+finflow_dbt/profiles.yml
+finflow_dbt/.user.yml
+terraform/terraform.tfvars
+terraform/*.tfvars

@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: spectrum_bronze
+    tables:
+      - name: market_data
+        description: "Raw OHLCV market data from Polygon.io landing in S3 bronze layer"
