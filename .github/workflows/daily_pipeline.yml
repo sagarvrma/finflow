@@ -1,0 +1,66 @@
+name: FinFlow Daily Pipeline
+
+on:
+  schedule:
+    - cron: '0 11 * * 1-5'  # 6am ET = 11am UTC, Monday-Friday
+  workflow_dispatch:          # allows manual trigger from GitHub UI
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests boto3 python-dotenv great-expectations pandas dbt-redshift psycopg2-binary
+
+      - name: Ingest market data
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: python ingestion/ingest_market_data.py
+
+      - name: Validate bronze data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: python quality/validate_bronze.py
+
+      - name: Run Glue crawler
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: python -c "
+          import boto3, time
+          client = boto3.client('glue', region_name='us-east-1')
+          client.start_crawler(Name='finflow-market-data-crawler')
+          while True:
+            state = client.get_crawler(Name='finflow-market-data-crawler')['Crawler']['State']
+            if state == 'READY': break
+            print(f'Crawler: {state}')
+            time.sleep(10)
+          print('Crawler done.')
+          "
+
+      - name: Run dbt models
+        env:
+          REDSHIFT_HOST: ${{ secrets.REDSHIFT_HOST }}
+          REDSHIFT_PASSWORD: ${{ secrets.REDSHIFT_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          cd finflow_dbt
+          dbt run --profiles-dir . --select stg_market_data mrt_market_summary mrt_volume_anomaly
