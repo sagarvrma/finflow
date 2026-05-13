@@ -15,8 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Connection to Redshift
-@st.cache_resource
+# Connection to Redshift — not cached so stale connections don't break the app
 def get_connection():
     return psycopg2.connect(
         host=os.getenv("REDSHIFT_HOST"),
@@ -36,7 +35,9 @@ def load_market_summary():
         FROM public.mrt_market_summary
         ORDER BY trade_date, ticker
     """
-    return pd.read_sql(query, conn)
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df
 
 @st.cache_data(ttl=3600)
 def load_volume_anomalies():
@@ -47,7 +48,9 @@ def load_volume_anomalies():
         FROM public.mrt_volume_anomaly
         ORDER BY trade_date, ticker
     """
-    return pd.read_sql(query, conn)
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df
 
 # Load data
 st.title("📈 FinFlow — Financial Data Pipeline Dashboard")
@@ -105,7 +108,6 @@ for ticker in df_anomaly["ticker"].unique():
 
     fig = go.Figure()
 
-    # Bar chart of volume
     fig.add_trace(go.Bar(
         x=df_t["trade_date"],
         y=df_t["volume"],
@@ -113,7 +115,6 @@ for ticker in df_anomaly["ticker"].unique():
         marker_color=[severity_colors.get(s, "#4CAF50") for s in df_t["anomaly_severity"]],
     ))
 
-    # Line for 5-day average
     fig.add_trace(go.Scatter(
         x=df_t["trade_date"],
         y=df_t["avg_volume_5d"],
